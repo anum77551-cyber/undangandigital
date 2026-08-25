@@ -420,8 +420,8 @@
       <!-- GANTI URL FOTO NGATINI DI BAWAH INI -->
       <div class="p-frame" style="background-image: url('ngatini1.jpeg');"></div>
       <div class="p-name serif">Ngatini</div>
-      <div class="p-role">Putri Dari</div>
-      <div class="p-parents"><br>Ibu Yapah</div>
+      <div class="p-role">Putri Ketiga Dari</div>
+      <div class="p-parents">Ibu Yapah</div>
       <div class="ig">◎</div>
     </div>
   </section>
@@ -436,13 +436,13 @@
     <div class="timeline reveal">
       <div class="t-item">
         <div class="t-dot"></div>
-        <div class="t-year">2019</div>
+        <div class="t-year">2023</div>
         <div class="t-title serif">Awal Kisah</div>
         <p class="t-text">Tak ada yang menyangka bahwa sebuah pertemuan singkat akan menjadi awal dari segalanya. Di antara miliaran kemungkinan, semesta memilih mempertemukan kami dalam satu waktu yang tak terduga, memulai cerita yang telah Tuhan gariskan.</p>
       </div>
       <div class="t-item">
         <div class="t-dot"></div>
-        <div class="t-year">2021</div>
+        <div class="t-year">2025</div>
         <div class="t-title serif">Saling Mendewasakan & Janji Setia</div>
         <p class="t-text">Perjalanan kami bukan hanya tentang kebahagiaan, tapi tentang proses saling mendewasakan. Kami belajar menyatukan perbedaan, membangun fondasi kepercayaan, dan meyakini bahwa setiap tantangan membuat kami semakin kokoh sebagai satuu kesatuan. Di titik ini, kami memilih berhenti mencari. Momen lamaran menjadi bukti nyata kesungguhan hati kami memilih untuk saling menjaga, mulai dari detik inihingga selamanya.</p>
       </div>
@@ -524,28 +524,29 @@
       <p class="lead">Konfirmasi kehadiran &amp; kirimkan doa terbaik Anda untuk kami.</p>
     </div>
 
-    <form id="wishForm" class="reveal" style="margin-top:34px;">
+    <!-- GANTI "YOUR_FORMSPREE_ENDPOINT" DENGAN LINK DARI FORMSPREE -->
+    <form id="wishForm" action="https://formspree.io/f/mrpzwaen" method="POST" class="reveal" style="margin-top:34px;">
       <div class="field">
         <label>Nama Lengkap</label>
-        <input type="text" id="wName" placeholder="Tulis nama Anda" required>
+        <input type="text" name="Nama" id="wName" placeholder="Tulis nama Anda" required>
       </div>
       <div class="field">
         <label>Kehadiran</label>
-        <select id="wAtt">
-          <option>Hadir</option>
-          <option>Tidak Bisa Hadir</option>
-          <option>Masih Ragu</option>
+        <select name="Kehadiran" id="wAtt">
+          <option value="Hadir">Hadir</option>
+          <option value="Tidak Bisa Hadir">Tidak Bisa Hadir</option>
+          <option value="Masih Ragu">Masih Ragu</option>
         </select>
       </div>
       <div class="field">
         <label>Ucapan &amp; Doa</label>
-        <textarea id="wMsg" placeholder="Tulis ucapan dan doa Anda..."></textarea>
+        <textarea name="Ucapan" id="wMsg" placeholder="Tulis ucapan dan doa Anda..." required></textarea>
       </div>
       <button type="submit" class="btn-solid" style="width:100%;">Kirim Ucapan</button>
     </form>
 
     <div class="wishlist" id="wishList">
-      <div class="empty-wish">Jadilah yang pertama mengirimkan ucapan ♡</div>
+      <div class="empty-wish">Ucapan yang dikirim akan masuk ke email Anda.</div>
     </div>
   </section>
 
@@ -598,7 +599,11 @@
 
 </div>
 
-<script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+  import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
   // ---- Guest name from URL (?to=Nama) ----
   const params = new URLSearchParams(window.location.search);
   const guest = params.get('to');
@@ -675,37 +680,136 @@
   }, {threshold:.4});
   navSections.forEach(s=>navIo.observe(s));
 
-  // ---- Wishes form (in-memory list) ----
-  const wishes = [];
+  // ---- Wishes form (Database Integration) ----
   const wishForm = document.getElementById('wishForm');
   const wishList = document.getElementById('wishList');
-  wishForm.addEventListener('submit', (e)=>{
-    e.preventDefault();
-    const name = document.getElementById('wName').value.trim();
-    const att = document.getElementById('wAtt').value;
-    const msg = document.getElementById('wMsg').value.trim();
-    if(!name) return;
-    wishes.unshift({name, att, msg});
-    renderWishes();
-    wishForm.reset();
-  });
-  function renderWishes(){
-    if(wishes.length===0){
-      wishList.innerHTML = '<div class="empty-wish">Jadilah yang pertama mengirimkan ucapan ♡</div>';
-      return;
-    }
-    wishList.innerHTML = wishes.map(w => `
-      <div class="wish-item">
-        <div class="who">${escapeHtml(w.name)}</div>
-        <div class="att">${escapeHtml(w.att)}</div>
-        ${w.msg ? `<div class="msg">${escapeHtml(w.msg)}</div>` : ''}
-      </div>`).join('');
-  }
+  
   function escapeHtml(str){
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
   }
+
+  async function initWishesDatabase() {
+    try {
+      // Cek apakah berjalan di lingkungan yang memiliki akses database
+      if (typeof __app_id === 'undefined' || typeof __firebase_config === 'undefined') {
+        console.warn("Menjalankan mode statis.");
+        setupLocalWishes();
+        return;
+      }
+
+      const appId = __app_id;
+      const firebaseConfig = JSON.parse(__firebase_config);
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const auth = getAuth(app);
+      let user = null;
+
+      // Autentikasi sistem penyimpanan
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          const userCredential = await signInWithCustomToken(auth, __initial_auth_token);
+          user = userCredential.user;
+      } else {
+          const userCredential = await signInAnonymously(auth);
+          user = userCredential.user;
+      }
+
+      if (!user) return;
+
+      const wishesRef = collection(db, 'artifacts', appId, 'public', 'data', 'wishes');
+
+      // Membaca data secara Realtime dari server
+      onSnapshot(wishesRef, (snapshot) => {
+          const wishes = [];
+          snapshot.forEach((doc) => {
+              wishes.push({ id: doc.id, ...doc.data() });
+          });
+          
+          // Urutkan ucapan dari yang terbaru
+          wishes.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+          if(wishes.length === 0){
+            wishList.innerHTML = '<div class="empty-wish">Jadilah yang pertama mengirimkan ucapan ♡</div>';
+            return;
+          }
+          
+          wishList.innerHTML = wishes.map(w => `
+            <div class="wish-item">
+              <div class="who">${escapeHtml(w.name)}</div>
+              <div class="att">${escapeHtml(w.att)}</div>
+              ${w.msg ? `<div class="msg">${escapeHtml(w.msg)}</div>` : ''}
+            </div>`).join('');
+      }, (error) => {
+          console.error("Gagal mengambil data:", error);
+      });
+
+      // Mengirim ucapan tamu ke server
+      wishForm.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const name = document.getElementById('wName').value.trim();
+        const att = document.getElementById('wAtt').value;
+        const msg = document.getElementById('wMsg').value.trim();
+        if(!name) return;
+
+        const submitBtn = wishForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Mengirim...';
+
+        try {
+            await addDoc(wishesRef, {
+                name,
+                att,
+                msg,
+                timestamp: Date.now()
+            });
+            wishForm.reset();
+        } catch (error) {
+            console.error("Gagal mengirim:", error);
+            submitBtn.textContent = 'Gagal Mengirim!';
+            setTimeout(() => {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Kirim Ucapan';
+            }, 3000);
+            return;
+        } 
+        
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Kirim Ucapan';
+      });
+
+    } catch (error) {
+      console.error("Terjadi kesalahan sistem:", error);
+      setupLocalWishes();
+    }
+  }
+
+  // Mode lokal fallback
+  function setupLocalWishes() {
+      const wishes = [];
+      wishForm.addEventListener('submit', (e)=>{
+        e.preventDefault();
+        const name = document.getElementById('wName').value.trim();
+        const att = document.getElementById('wAtt').value;
+        const msg = document.getElementById('wMsg').value.trim();
+        if(!name) return;
+        wishes.unshift({name, att, msg});
+        
+        if(wishes.length===0){
+          wishList.innerHTML = '<div class="empty-wish">Jadilah yang pertama mengirimkan ucapan ♡</div>';
+          return;
+        }
+        wishList.innerHTML = wishes.map(w => `
+          <div class="wish-item">
+            <div class="who">${escapeHtml(w.name)}</div>
+            <div class="att">${escapeHtml(w.att)}</div>
+            ${w.msg ? `<div class="msg">${escapeHtml(w.msg)}</div>` : ''}
+          </div>`).join('');
+        wishForm.reset();
+      });
+  }
+
+  initWishesDatabase();
 
   // ---- Copy bank number ----
   document.querySelectorAll('.copy-btn').forEach(btn=>{
@@ -717,7 +821,14 @@
         btn.textContent = '✓';
         setTimeout(()=>{ btn.classList.remove('copied'); btn.textContent = '⧉'; }, 1500);
       }catch(err){
-        alert('Nomor rekening: ' + val);
+        const numElement = btn.parentElement.querySelector('.num');
+        const oldText = numElement.textContent;
+        numElement.textContent = 'Gagal Salin';
+        numElement.style.color = '#ff6b6b';
+        setTimeout(() => {
+          numElement.textContent = oldText;
+          numElement.style.color = '';
+        }, 2000);
       }
     });
   });
