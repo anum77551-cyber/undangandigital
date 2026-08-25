@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>The Wedding of Joko & Tini</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Jost:wght@300;400;500&family=Great+Vibes&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --ink:#efe7d8;
@@ -169,6 +169,41 @@
   }
   .count-cell b{ display:block; font-family:'Cormorant Garamond', serif; font-size:30px; color:var(--ink);}
   .count-cell small{ font-size:9px; letter-spacing:.2em; color:var(--ink-dim); text-transform:uppercase;}
+
+  /* ---------- DOA / QUOTE PAGE ---------- */
+  #doa {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+    padding: 80px 30px;
+  }
+  .doa-arabic {
+    font-family: 'Amiri', serif;
+    font-size: 32px;
+    color: var(--gold);
+    margin: 40px 0 20px;
+    line-height: 1.5;
+  }
+  .doa-text {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--ink-dim);
+    margin-bottom: 24px;
+  }
+  .doa-text.italic {
+    font-style: italic;
+  }
+  .doa-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px;
+    color: var(--gold);
+    margin-bottom: 24px;
+    font-weight: 500;
+  }
 
   /* ---------- PROFILES ---------- */
   .profile{ margin-bottom:66px; }
@@ -398,6 +433,35 @@
     </div>
   </section>
 
+  <!-- ================= DOA & HARAPAN ================= -->
+  <section id="doa">
+    <div class="center reveal">
+      <div class="doa-title">QS. Ar-Rum: 21</div>
+      
+      <p class="doa-text italic">
+        "Dan di antara tanda-tanda kekuasaan-Nya ialah Dia menciptakan untukmu pasangan hidup dari jenismu sendiri, supaya kamu mendapatkan ketenangan hati dan dijadikan-Nya kasih sayang di antara kamu. Sesungguhnya yang demikian menjadi tanda-tanda kebesaran-Nya bagi orang-orang yang berpikir."
+      </p>
+
+      <div class="doa-arabic">بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيم</div>
+      
+      <p class="doa-text">
+        Assalamu'alaikum Warahmatullahi Wabarakatuh
+      </p>
+      
+      <p class="doa-text">
+        Dengan memohon rahmat dan ridho Allah SWT yang telah menciptakan Makhluk-Nya secara berpasang-pasangan, kami bermaksud menyelenggarakan acara Walimatul Ursy.
+      </p>
+
+      <p class="doa-text">
+        Kami memohon do'a restu agar menjadi keluarga yang Sakinah Mawaddah Warrahmah. Atas perhatiannya, kami ucapkan terimakasih.
+      </p>
+
+      <p class="doa-text">
+        Wassalamu'alaikum Warahmatullahi Wabarakatuh
+      </p>
+    </div>
+  </section>
+
   <!-- ================= PROFILES ================= -->
   <section id="couple">
     <div class="center reveal">
@@ -591,6 +655,7 @@
   <!-- ================= NAV ================= -->
   <nav id="nav" class="hidden">
     <a href="#home" data-target="home">⌂<span class="dot"></span></a>
+    <a href="#doa" data-target="doa">📖<span class="dot"></span></a>
     <a href="#couple" data-target="couple">♀♂<span class="dot"></span></a>
     <a href="#event" data-target="event">▤<span class="dot"></span></a>
     <a href="#gallery" data-target="gallery">▦<span class="dot"></span></a>
@@ -664,7 +729,7 @@
 
   // ---- Nav active state ----
   const navLinks = document.querySelectorAll('#nav a');
-  const navSections = ['home','couple','event','gallery','wishes'].map(id=>document.getElementById(id));
+  const navSections = ['home','doa','couple','event','gallery','wishes'].map(id=>document.getElementById(id));
   const navIo = new IntersectionObserver((entries)=>{
     entries.forEach(entry=>{
       if(entry.isIntersecting){
