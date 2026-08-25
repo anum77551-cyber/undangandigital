@@ -681,6 +681,7 @@
   const wishList = document.getElementById('wishList');
   
   function escapeHtml(str){
+    if (!str) return '';
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
@@ -694,11 +695,16 @@
     submitBtn.disabled = true;
     submitBtn.textContent = 'Mengirim...';
 
-    // Mengambil data dari form
+    // 1. AMBIL DATA DULU SEBELUM MENGIRIM / MERESET
+    const namaTamu = document.getElementById('wName').value.trim();
+    const kehadiranTamu = document.getElementById('wAtt').value;
+    const pesanTamu = document.getElementById('wMsg').value.trim();
+
+    // 2. SIAPKAN DATA UNTUK EMAIL
     const data = new FormData(wishForm);
     
     try {
-      // Mengirim data ke Formspree di latar belakang
+      // 3. KIRIM KE FORMSPREE
       const response = await fetch(wishForm.action, {
         method: wishForm.method,
         body: data,
@@ -708,27 +714,23 @@
       });
       
       if (response.ok) {
-        // Jika sukses terkirim ke email, tampilkan di layar secara visual
-        const name = document.getElementById('wName').value.trim();
-        const att = document.getElementById('wAtt').value;
-        const msg = document.getElementById('wMsg').value.trim();
-        
+        // 4. JIKA SUKSES TERKIRIM, TAMPILKAN DI LAYAR
         const newWish = document.createElement('div');
         newWish.className = 'wish-item';
         newWish.innerHTML = `
-          <div class="who">${escapeHtml(name)}</div>
-          <div class="att">${escapeHtml(att)}</div>
-          ${msg ? `<div class="msg">${escapeHtml(msg)}</div>` : ''}
+          <div class="who">${escapeHtml(namaTamu)}</div>
+          <div class="att">${escapeHtml(kehadiranTamu)}</div>
+          ${pesanTamu ? `<div class="msg">${escapeHtml(pesanTamu)}</div>` : ''}
         `;
         
-        // Menghapus pesan kosong jika ada
+        // Hapus tulisan "Ucapan yang dikirim akan masuk email..." jika ada
         const emptyMsg = wishList.querySelector('.empty-wish');
         if(emptyMsg) emptyMsg.remove();
         
-        // Memasukkan ucapan baru ke daftar paling atas
+        // Masukkan ucapan baru ke daftar paling atas
         wishList.prepend(newWish);
         
-        // Mengosongkan form kembali
+        // Kosongkan form setelah semua selesai
         wishForm.reset();
         
         submitBtn.textContent = 'Berhasil Terkirim!';
