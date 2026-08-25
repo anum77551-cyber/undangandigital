@@ -665,19 +665,17 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-  import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-  import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+  import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-  // Konfigurasi Database (Otomatis berjalan di editor ini)
-  const appId = 'undangan-joko-tini';
-   const firebaseConfig = {
-     apiKey: "AIzaSyBZ6NJCrxz0ilcm6Vol-4KW8SzA0XXqqKU",
-     authDomain: "jokoo-67fa2.firebaseapp.com",
-     projectId: "jokoo-67fa2",
-     storageBucket: "jokoo-67fa2.firebasestorage.app",
-     messagingSenderId: "180850595447",
-     appId: "1:180850595447:web:ddf8c3f752afa9ae045872"
-   };
+  // Konfigurasi Database Firebase Anda
+  const firebaseConfig = {
+    apiKey: "AIzaSyBZ6NJCrxz0ilcm6Vol-4KW8SzA0XXqqKU",
+    authDomain: "jokoo-67fa2.firebaseapp.com",
+    projectId: "jokoo-67fa2",
+    storageBucket: "jokoo-67fa2.firebasestorage.app",
+    messagingSenderId: "180850595447",
+    appId: "1:180850595447:web:ddf8c3f752afa9ae045872"
+  };
 
   // ---- Guest name from URL (?to=Nama) ----
   const params = new URLSearchParams(window.location.search);
@@ -769,95 +767,63 @@
     }
     wishList.innerHTML = wishesArray.map(w => `
       <div class="wish-item">
-        <div class="who">${escapeHtml(w.name)}</div>
-        <div class="att">${escapeHtml(w.att)}</div>
-        ${w.msg ? `<div class="msg">${escapeHtml(w.msg)}</div>` : ''}
+        <div class="who">${escapeHtml(w.nama)}</div>
+        <div class="att">${escapeHtml(w.kehadiran)}</div>
+        ${w.ucapan ? `<div class="msg">${escapeHtml(w.ucapan)}</div>` : ''}
       </div>`).join('');
   }
 
-  // Jika terhubung dengan Database
-  if (firebaseConfig) {
-      const app = initializeApp(firebaseConfig);
-      const auth = getAuth(app);
-      const db = getFirestore(app);
-      let currentUser = null;
+  // Inisialisasi Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
 
-      async function initDB() {
-          try {
-              if (typeof __initial_auth_token !== 'undefined') {
-                  await signInWithCustomToken(auth, __initial_auth_token);
-              } else {
-                  await signInAnonymously(auth);
-              }
-              currentUser = auth.currentUser;
-              
-              // Membaca data dari database secara real-time
-              const wishesCol = collection(db, 'artifacts', appId, 'public', 'data', 'wishes');
-              onSnapshot(wishesCol, (snapshot) => {
-                  const wishes = [];
-                  snapshot.forEach(doc => { wishes.push(doc.data()); });
-                  
-                  // Urutkan dari yang paling baru
-                  wishes.sort((a, b) => {
-                      const tA = a.timestamp ? a.timestamp.toMillis() : 0;
-                      const tB = b.timestamp ? b.timestamp.toMillis() : 0;
-                      return tB - tA; 
-                  });
-                  
-                  renderWishes(wishes);
-              }, (error) => {
-                  console.error("Gagal membaca database:", error);
-              });
-          } catch(e) {
-              console.error("Autentikasi gagal:", e);
-          }
-      }
-      initDB();
+  // Membaca data dari database secara real-time
+  const wishesRef = collection(db, 'ucapan_tamu');
+  const q = query(wishesRef, orderBy("waktu", "desc"));
+  
+  onSnapshot(q, (snapshot) => {
+      const wishes = [];
+      snapshot.forEach(doc => { wishes.push(doc.data()); });
+      renderWishes(wishes);
+  }, (error) => {
+      console.error("Gagal membaca database:", error);
+      wishList.innerHTML = '<div class="empty-wish" style="color:#ff6b6b;">Gagal memuat ucapan. Pastikan koneksi internet stabil.</div>';
+  });
 
-      // Saat tombol kirim ditekan
-      wishForm.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          if (!currentUser) return;
+  // Saat tombol kirim ditekan
+  wishForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const submitBtn = wishForm.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Menyimpan...';
+
+      const nama = document.getElementById('wName').value.trim();
+      const kehadiran = document.getElementById('wAtt').value;
+      const ucapan = document.getElementById('wMsg').value.trim();
+
+      try {
+          // Menyimpan ke database
+          await addDoc(collection(db, 'ucapan_tamu'), {
+              nama: nama,
+              kehadiran: kehadiran,
+              ucapan: ucapan,
+              waktu: serverTimestamp()
+          });
           
-          const submitBtn = wishForm.querySelector('button[type="submit"]');
-          const originalText = submitBtn.textContent;
-          submitBtn.disabled = true;
-          submitBtn.textContent = 'Menyimpan...';
-
-          const name = document.getElementById('wName').value.trim();
-          const att = document.getElementById('wAtt').value;
-          const msg = document.getElementById('wMsg').value.trim();
-
-          try {
-              // Menyimpan ke database
-              const wishesCol = collection(db, 'artifacts', appId, 'public', 'data', 'wishes');
-              await addDoc(wishesCol, {
-                  name: name,
-                  att: att,
-                  msg: msg,
-                  timestamp: serverTimestamp(),
-                  userId: currentUser.uid
-              });
-              
-              wishForm.reset();
-              submitBtn.textContent = 'Tersimpan Permanen!';
-              setTimeout(() => {
-                  submitBtn.disabled = false;
-                  submitBtn.textContent = originalText;
-              }, 3000);
-          } catch (err) {
-              submitBtn.textContent = 'Gagal menyimpan';
-              setTimeout(() => { submitBtn.disabled = false; submitBtn.textContent = originalText; }, 3000);
-          }
-      });
-  } else {
-      // Jika di Vercel tapi belum set config database
-      wishList.innerHTML = '<div class="empty-wish" style="color:#ff6b6b;">Tamu belum bisa mengirim ucapan karena Database belum dipasang ke Vercel. Silakan baca Panduan Database!</div>';
-      wishForm.addEventListener('submit', (e) => {
-          e.preventDefault();
-          alert("Silakan pasang kode konfigurasi Firebase terlebih dahulu untuk mengaktifkan fitur ini.");
-      });
-  }
+          wishForm.reset();
+          submitBtn.textContent = 'Tersimpan Permanen!';
+          setTimeout(() => {
+              submitBtn.disabled = false;
+              submitBtn.textContent = originalText;
+          }, 3000);
+      } catch (err) {
+          console.error("Gagal menyimpan:", err);
+          submitBtn.textContent = 'Gagal menyimpan!';
+          setTimeout(() => { submitBtn.disabled = false; submitBtn.textContent = originalText; }, 3000);
+      }
+  });
 
   document.querySelectorAll('.copy-btn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
