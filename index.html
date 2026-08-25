@@ -599,11 +599,7 @@
 
 </div>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-  import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-  import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
+<script>
   // ---- Guest name from URL (?to=Nama) ----
   const params = new URLSearchParams(window.location.search);
   const guest = params.get('to');
@@ -680,7 +676,7 @@
   }, {threshold:.4});
   navSections.forEach(s=>navIo.observe(s));
 
-  // ---- Wishes form (Database Integration) ----
+  // ---- Wishes form (Formspree Integration) ----
   const wishForm = document.getElementById('wishForm');
   const wishList = document.getElementById('wishList');
   
@@ -690,126 +686,71 @@
     return d.innerHTML;
   }
 
-  async function initWishesDatabase() {
+  wishForm.addEventListener('submit', async (e) => {
+    e.preventDefault(); // Mencegah pindah halaman
+    
+    const submitBtn = wishForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Mengirim...';
+
+    // Mengambil data dari form
+    const data = new FormData(wishForm);
+    
     try {
-      // Cek apakah berjalan di lingkungan yang memiliki akses database
-      if (typeof __app_id === 'undefined' || typeof __firebase_config === 'undefined') {
-        console.warn("Menjalankan mode statis.");
-        setupLocalWishes();
-        return;
-      }
-
-      const appId = __app_id;
-      const firebaseConfig = JSON.parse(__firebase_config);
-      const app = initializeApp(firebaseConfig);
-      const db = getFirestore(app);
-      const auth = getAuth(app);
-      let user = null;
-
-      // Autentikasi sistem penyimpanan
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          const userCredential = await signInWithCustomToken(auth, __initial_auth_token);
-          user = userCredential.user;
-      } else {
-          const userCredential = await signInAnonymously(auth);
-          user = userCredential.user;
-      }
-
-      if (!user) return;
-
-      const wishesRef = collection(db, 'artifacts', appId, 'public', 'data', 'wishes');
-
-      // Membaca data secara Realtime dari server
-      onSnapshot(wishesRef, (snapshot) => {
-          const wishes = [];
-          snapshot.forEach((doc) => {
-              wishes.push({ id: doc.id, ...doc.data() });
-          });
-          
-          // Urutkan ucapan dari yang terbaru
-          wishes.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-          if(wishes.length === 0){
-            wishList.innerHTML = '<div class="empty-wish">Jadilah yang pertama mengirimkan ucapan ♡</div>';
-            return;
-          }
-          
-          wishList.innerHTML = wishes.map(w => `
-            <div class="wish-item">
-              <div class="who">${escapeHtml(w.name)}</div>
-              <div class="att">${escapeHtml(w.att)}</div>
-              ${w.msg ? `<div class="msg">${escapeHtml(w.msg)}</div>` : ''}
-            </div>`).join('');
-      }, (error) => {
-          console.error("Gagal mengambil data:", error);
-      });
-
-      // Mengirim ucapan tamu ke server
-      wishForm.addEventListener('submit', async (e)=>{
-        e.preventDefault();
-        const name = document.getElementById('wName').value.trim();
-        const att = document.getElementById('wAtt').value;
-        const msg = document.getElementById('wMsg').value.trim();
-        if(!name) return;
-
-        const submitBtn = wishForm.querySelector('button[type="submit"]');
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Mengirim...';
-
-        try {
-            await addDoc(wishesRef, {
-                name,
-                att,
-                msg,
-                timestamp: Date.now()
-            });
-            wishForm.reset();
-        } catch (error) {
-            console.error("Gagal mengirim:", error);
-            submitBtn.textContent = 'Gagal Mengirim!';
-            setTimeout(() => {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Kirim Ucapan';
-            }, 3000);
-            return;
-        } 
-        
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Kirim Ucapan';
-      });
-
-    } catch (error) {
-      console.error("Terjadi kesalahan sistem:", error);
-      setupLocalWishes();
-    }
-  }
-
-  // Mode lokal fallback
-  function setupLocalWishes() {
-      const wishes = [];
-      wishForm.addEventListener('submit', (e)=>{
-        e.preventDefault();
-        const name = document.getElementById('wName').value.trim();
-        const att = document.getElementById('wAtt').value;
-        const msg = document.getElementById('wMsg').value.trim();
-        if(!name) return;
-        wishes.unshift({name, att, msg});
-        
-        if(wishes.length===0){
-          wishList.innerHTML = '<div class="empty-wish">Jadilah yang pertama mengirimkan ucapan ♡</div>';
-          return;
+      // Mengirim data ke Formspree di latar belakang
+      const response = await fetch(wishForm.action, {
+        method: wishForm.method,
+        body: data,
+        headers: {
+          'Accept': 'application/json'
         }
-        wishList.innerHTML = wishes.map(w => `
-          <div class="wish-item">
-            <div class="who">${escapeHtml(w.name)}</div>
-            <div class="att">${escapeHtml(w.att)}</div>
-            ${w.msg ? `<div class="msg">${escapeHtml(w.msg)}</div>` : ''}
-          </div>`).join('');
-        wishForm.reset();
       });
-  }
-
-  initWishesDatabase();
+      
+      if (response.ok) {
+        // Jika sukses terkirim ke email, tampilkan di layar secara visual
+        const name = document.getElementById('wName').value.trim();
+        const att = document.getElementById('wAtt').value;
+        const msg = document.getElementById('wMsg').value.trim();
+        
+        const newWish = document.createElement('div');
+        newWish.className = 'wish-item';
+        newWish.innerHTML = `
+          <div class="who">${escapeHtml(name)}</div>
+          <div class="att">${escapeHtml(att)}</div>
+          ${msg ? `<div class="msg">${escapeHtml(msg)}</div>` : ''}
+        `;
+        
+        // Menghapus pesan kosong jika ada
+        const emptyMsg = wishList.querySelector('.empty-wish');
+        if(emptyMsg) emptyMsg.remove();
+        
+        // Memasukkan ucapan baru ke daftar paling atas
+        wishList.prepend(newWish);
+        
+        // Mengosongkan form kembali
+        wishForm.reset();
+        
+        submitBtn.textContent = 'Berhasil Terkirim!';
+        setTimeout(() => {
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+        }, 3000);
+      } else {
+        submitBtn.textContent = 'Gagal, Coba Lagi';
+        setTimeout(() => {
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+        }, 3000);
+      }
+    } catch (error) {
+      submitBtn.textContent = 'Error Jaringan';
+      setTimeout(() => {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+      }, 3000);
+    }
+  });
 
   // ---- Copy bank number ----
   document.querySelectorAll('.copy-btn').forEach(btn=>{
