@@ -588,8 +588,7 @@
       <p class="lead">Konfirmasi kehadiran &amp; kirimkan doa terbaik Anda untuk kami.</p>
     </div>
 
-    <!-- GANTI "YOUR_FORMSPREE_ENDPOINT" DENGAN LINK DARI FORMSPREE -->
-    <form id="wishForm" action="https://formspree.io/f/mrpzwaen" method="POST" class="reveal" style="margin-top:34px;">
+    <form id="wishForm" class="reveal" style="margin-top:34px;">
       <div class="field">
         <label>Nama Lengkap</label>
         <input type="text" name="Nama" id="wName" placeholder="Tulis nama Anda" required>
@@ -664,7 +663,22 @@
 
 </div>
 
-<script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+  import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+  // Konfigurasi Database (Otomatis berjalan di editor ini)
+  const appId = 'undangan-joko-tini';
+   const firebaseConfig = {
+     apiKey: "AIzaSyBZ6NJCrxz0ilcm6Vol-4KW8SzA0XXqqKU",
+     authDomain: "jokoo-67fa2.firebaseapp.com",
+     projectId: "jokoo-67fa2",
+     storageBucket: "jokoo-67fa2.firebasestorage.app",
+     messagingSenderId: "180850595447",
+     appId: "1:180850595447:web:ddf8c3f752afa9ae045872"
+   };
+
   // ---- Guest name from URL (?to=Nama) ----
   const params = new URLSearchParams(window.location.search);
   const guest = params.get('to');
@@ -677,15 +691,12 @@
     document.body.style.overflow = 'auto';
     setTimeout(()=> document.getElementById('gate').style.display='none', 900);
 
-    // Mulai musik otomatis begitu undangan dibuka (gesture user sudah ada dari klik ini)
     const music = document.getElementById('bgMusic');
     const musicBtn = document.getElementById('musicBtn');
     music.volume = 0.6;
     music.play().then(()=>{
       musicBtn.classList.add('playing');
-    }).catch(()=>{
-      // Jika browser tetap memblokir autoplay, tombol musik tetap bisa dipakai manual
-    });
+    }).catch(()=>{});
     musicBtn.classList.remove('hidden');
   });
 
@@ -739,9 +750,8 @@
       }
     });
   }, {threshold:.4});
-  navSections.forEach(s=>navIo.observe(s));
+  navSections.forEach(s=>{ if(s) navIo.observe(s); });
 
-  // ---- Wishes form (Formspree Integration) ----
   const wishForm = document.getElementById('wishForm');
   const wishList = document.getElementById('wishList');
   
@@ -752,74 +762,103 @@
     return d.innerHTML;
   }
 
-  wishForm.addEventListener('submit', async (e) => {
-    e.preventDefault(); // Mencegah pindah halaman
-    
-    const submitBtn = wishForm.querySelector('button[type="submit"]');
-    const originalText = submitBtn.textContent;
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Mengirim...';
-
-    // 1. AMBIL DATA DULU SEBELUM MENGIRIM / MERESET
-    const namaTamu = document.getElementById('wName').value.trim();
-    const kehadiranTamu = document.getElementById('wAtt').value;
-    const pesanTamu = document.getElementById('wMsg').value.trim();
-
-    // 2. SIAPKAN DATA UNTUK EMAIL
-    const data = new FormData(wishForm);
-    
-    try {
-      // 3. KIRIM KE FORMSPREE
-      const response = await fetch(wishForm.action, {
-        method: wishForm.method,
-        body: data,
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        // 4. JIKA SUKSES TERKIRIM, TAMPILKAN DI LAYAR
-        const newWish = document.createElement('div');
-        newWish.className = 'wish-item';
-        newWish.innerHTML = `
-          <div class="who">${escapeHtml(namaTamu)}</div>
-          <div class="att">${escapeHtml(kehadiranTamu)}</div>
-          ${pesanTamu ? `<div class="msg">${escapeHtml(pesanTamu)}</div>` : ''}
-        `;
-        
-        // Hapus tulisan "Ucapan yang dikirim akan masuk email..." jika ada
-        const emptyMsg = wishList.querySelector('.empty-wish');
-        if(emptyMsg) emptyMsg.remove();
-        
-        // Masukkan ucapan baru ke daftar paling atas
-        wishList.prepend(newWish);
-        
-        // Kosongkan form setelah semua selesai
-        wishForm.reset();
-        
-        submitBtn.textContent = 'Berhasil Terkirim!';
-        setTimeout(() => {
-          submitBtn.disabled = false;
-          submitBtn.textContent = originalText;
-        }, 3000);
-      } else {
-        submitBtn.textContent = 'Gagal, Coba Lagi';
-        setTimeout(() => {
-          submitBtn.disabled = false;
-          submitBtn.textContent = originalText;
-        }, 3000);
-      }
-    } catch (error) {
-      submitBtn.textContent = 'Error Jaringan';
-      setTimeout(() => {
-        submitBtn.disabled = false;
-        submitBtn.textContent = originalText;
-      }, 3000);
+  function renderWishes(wishesArray) {
+    if(wishesArray.length === 0){
+      wishList.innerHTML = '<div class="empty-wish">Jadilah yang pertama mengirimkan ucapan ♡</div>';
+      return;
     }
-  });
+    wishList.innerHTML = wishesArray.map(w => `
+      <div class="wish-item">
+        <div class="who">${escapeHtml(w.name)}</div>
+        <div class="att">${escapeHtml(w.att)}</div>
+        ${w.msg ? `<div class="msg">${escapeHtml(w.msg)}</div>` : ''}
+      </div>`).join('');
+  }
 
-  // ---- Copy bank number ----
+  // Jika terhubung dengan Database
+  if (firebaseConfig) {
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+      let currentUser = null;
+
+      async function initDB() {
+          try {
+              if (typeof __initial_auth_token !== 'undefined') {
+                  await signInWithCustomToken(auth, __initial_auth_token);
+              } else {
+                  await signInAnonymously(auth);
+              }
+              currentUser = auth.currentUser;
+              
+              // Membaca data dari database secara real-time
+              const wishesCol = collection(db, 'artifacts', appId, 'public', 'data', 'wishes');
+              onSnapshot(wishesCol, (snapshot) => {
+                  const wishes = [];
+                  snapshot.forEach(doc => { wishes.push(doc.data()); });
+                  
+                  // Urutkan dari yang paling baru
+                  wishes.sort((a, b) => {
+                      const tA = a.timestamp ? a.timestamp.toMillis() : 0;
+                      const tB = b.timestamp ? b.timestamp.toMillis() : 0;
+                      return tB - tA; 
+                  });
+                  
+                  renderWishes(wishes);
+              }, (error) => {
+                  console.error("Gagal membaca database:", error);
+              });
+          } catch(e) {
+              console.error("Autentikasi gagal:", e);
+          }
+      }
+      initDB();
+
+      // Saat tombol kirim ditekan
+      wishForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          if (!currentUser) return;
+          
+          const submitBtn = wishForm.querySelector('button[type="submit"]');
+          const originalText = submitBtn.textContent;
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Menyimpan...';
+
+          const name = document.getElementById('wName').value.trim();
+          const att = document.getElementById('wAtt').value;
+          const msg = document.getElementById('wMsg').value.trim();
+
+          try {
+              // Menyimpan ke database
+              const wishesCol = collection(db, 'artifacts', appId, 'public', 'data', 'wishes');
+              await addDoc(wishesCol, {
+                  name: name,
+                  att: att,
+                  msg: msg,
+                  timestamp: serverTimestamp(),
+                  userId: currentUser.uid
+              });
+              
+              wishForm.reset();
+              submitBtn.textContent = 'Tersimpan Permanen!';
+              setTimeout(() => {
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = originalText;
+              }, 3000);
+          } catch (err) {
+              submitBtn.textContent = 'Gagal menyimpan';
+              setTimeout(() => { submitBtn.disabled = false; submitBtn.textContent = originalText; }, 3000);
+          }
+      });
+  } else {
+      // Jika di Vercel tapi belum set config database
+      wishList.innerHTML = '<div class="empty-wish" style="color:#ff6b6b;">Tamu belum bisa mengirim ucapan karena Database belum dipasang ke Vercel. Silakan baca Panduan Database!</div>';
+      wishForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          alert("Silakan pasang kode konfigurasi Firebase terlebih dahulu untuk mengaktifkan fitur ini.");
+      });
+  }
+
   document.querySelectorAll('.copy-btn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const val = btn.getAttribute('data-copy');
@@ -841,7 +880,6 @@
     });
   });
 
-  // ---- Add to calendar (basic .ics download) ----
   function makeIcs(title, start, end, location){
     const fmt = d => d.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
     return `BEGIN:VCALENDAR
@@ -865,29 +903,22 @@ END:VCALENDAR`;
     downloadIcs('pernikahan-joko-ngatini.ics', makeIcs('Pernikahan Joko & Ngatini', new Date('2026-9-13T08:00:00'), new Date('2026-9-13T14:00:00'), 'Lokasi Pernikahan'));
   });
 
-  // ---- Handle Visibility Change (Pause music when tab is inactive) ----
+  // ---- Handle Visibility Change ----
   document.addEventListener("visibilitychange", function() {
     const music = document.getElementById('bgMusic');
     const musicBtn = document.getElementById('musicBtn');
     
     if (document.hidden) {
-      // Halaman tidak terlihat (tab ditutup/minimize), jeda musik
       if (!music.paused) {
         music.pause();
         musicBtn.classList.remove('playing');
-        // Tambahkan flag agar kita tahu musik dijeda oleh sistem, bukan oleh user
         music.dataset.pausedBySystem = "true"; 
       }
     } else {
-      // Halaman terlihat kembali
-      // Hanya putar kembali JIKA sebelumnya musik sedang diputar dan dijeda oleh sistem
       if (music.dataset.pausedBySystem === "true") {
         music.play().then(() => {
           musicBtn.classList.add('playing');
-        }).catch(() => {
-           // Handle kemungkinan error autoplay
-        });
-        // Hapus flag setelah diputar kembali
+        }).catch(() => {});
         delete music.dataset.pausedBySystem;
       }
     }
